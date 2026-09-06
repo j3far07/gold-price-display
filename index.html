@@ -1,0 +1,919 @@
+<!doctype html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0A0907">
+<title>لوحة أسعار الذهب</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* =========================================================================
+   لوحة أسعار الذهب — kiosk price board
+   Palette: warm ink (charcoal), gold leaf, ivory numerals,
+            jade = up, vermilion = down. No framework, no build step.
+   ========================================================================= */
+
+:root{
+  /* ---- ink & metal ---- */
+  --ink:        #0A0907;
+  --ink-2:      #100D09;
+  --hair:       rgba(217,180,91,.13);   /* hairline inside panels   */
+  --line:       rgba(217,180,91,.24);   /* structural gold rule     */
+  --gold:       #D9B45B;
+  --gold-hi:    #F5DE9C;
+  --gold-deep:  #8C6B22;
+  --ivory:      #FCF5E6;                /* the numerals             */
+  --muted:      #9C927E;
+  --dim:        #6E675A;
+  /* ---- market convention: up green / down red ---- */
+  --up:         #5FD9A4;
+  --up-bg:      rgba(47,190,132,.11);
+  --up-line:    rgba(47,190,132,.34);
+  --down:       #FF9C8C;
+  --down-bg:    rgba(226,86,68,.12);
+  --down-line:  rgba(226,86,68,.36);
+  --flat:       #8F8779;
+
+  /* ---- distance scale: one unit, clamped, drives every size ----
+     landscape: width- and height-aware.  portrait: width-driven.   */
+  --u: clamp(9px, min(1.10vw, 1.55vh), 20px);
+
+  --font-ar: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+  --font-kufi: 'Noto Kufi Arabic', 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+}
+
+/* portrait tablets / phones: vertical room is plentiful, width is the limit */
+@media (max-aspect-ratio: 1/1){
+  :root{ --u: clamp(9px, min(1.70vw, 1.00vh), 18px); }
+}
+
+*,*::before,*::after{ box-sizing:border-box; margin:0; padding:0; }
+
+html,body{ height:100%; }
+
+body{
+  background: var(--ink);
+  color: var(--ivory);
+  font-family: var(--font-ar);
+  font-weight: 400;
+  overflow: hidden;                 /* kiosk: nothing ever scrolls */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- background: warm furnace glow + machined texture + vignette --- */
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(120% 80% at 50% -12%, rgba(217,180,91,.16), rgba(217,180,91,0) 58%),
+    radial-gradient(90% 70% at 50% 118%, rgba(140,107,34,.14), rgba(140,107,34,0) 60%),
+    linear-gradient(180deg, #0C0A07 0%, var(--ink-2) 46%, #080705 100%);
+}
+body::after{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  opacity:.5;
+  background-image:
+    repeating-linear-gradient(97deg, rgba(255,255,255,.014) 0 1px, rgba(0,0,0,0) 1px 4px),
+    radial-gradient(120% 120% at 50% 50%, rgba(0,0,0,0) 45%, rgba(0,0,0,.62) 100%);
+}
+
+.sr-only{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+}
+
+/* ------------------------------- frame --------------------------------- */
+.frame{
+  position:relative; z-index:1;
+  height:100vh; height:100dvh;
+  display:grid;
+  /* five tracks for five children (header, alert, board, empty, footer):
+     the board always owns the flexible track even while alert/empty are
+     display:none, so the footer can never swallow the free space.        */
+  grid-template-rows: auto auto minmax(0,1fr) auto auto;
+  gap: calc(var(--u) * 1.15);
+  padding: calc(var(--u) * 1.5) calc(var(--u) * 2.1) calc(var(--u) * 1.2);
+  transition: opacity .5s ease, filter .5s ease;
+}
+/* pin every child to its track: auto-placement would skip the display:none
+   children (alert / empty) and hand the footer the flexible track.        */
+.masthead   { grid-row:1; }
+.alert      { grid-row:2; }
+.board-grid { grid-row:3; }
+.empty      { grid-row:3; }   /* shares the flexible track; never visible together */
+.ledger     { grid-row:5; }
+/* engraved plaque edge */
+.frame::before{
+  content:""; position:absolute;
+  inset: calc(var(--u) * .75);
+  border:1px solid rgba(217,180,91,.14);
+  border-radius: calc(var(--u) * .35);
+  pointer-events:none;
+}
+.frame.stale{ opacity:.62; filter: saturate(.55); }
+.frame.stale .masthead,
+.frame.stale .ledger,
+.frame.stale .alert{ opacity:1; filter:none; }
+
+/* ------------------------------ masthead ------------------------------- */
+.masthead{
+  display:grid;
+  grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+  align-items:center;
+  gap: calc(var(--u) * 1.4);
+  padding-bottom: calc(var(--u) * .95);
+  border-bottom:1px solid var(--line);
+  position:relative;
+}
+.masthead::after{           /* centre diamond on the gold rule */
+  content:""; position:absolute; bottom:calc(var(--u) * -.34); right:50%;
+  width:calc(var(--u) * .5); height:calc(var(--u) * .5);
+  transform: translateX(50%) rotate(45deg);
+  background: var(--gold); opacity:.75;
+  box-shadow: 0 0 calc(var(--u) * .8) rgba(245,222,156,.5);
+}
+
+.brand{ display:flex; align-items:center; gap: calc(var(--u) * .9); min-width:0; }
+.mark{ width: calc(var(--u) * 3.1); height: calc(var(--u) * 3.1); flex:none; }
+.brand-text{ min-width:0; }
+.shop{
+  font-family: var(--font-kufi); font-weight:700;
+  font-size: calc(var(--u) * 2.05); line-height:1.15;
+  color: var(--ivory); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.tagline{
+  font-size: calc(var(--u) * 1.02); color: var(--gold); font-weight:500;
+  margin-top: calc(var(--u) * .18); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+}
+
+.clock{ text-align:center; }
+.clock-time{
+  font-size: calc(var(--u) * 2.15); font-weight:600; line-height:1;
+  color: var(--gold-hi); font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 calc(var(--u) * 1.4) rgba(245,222,156,.22);
+}
+.clock-date{ font-size: calc(var(--u) * 1.02); color: var(--muted); margin-top: calc(var(--u) * .3); }
+
+.live{ display:flex; align-items:center; justify-content:flex-end; gap: calc(var(--u) * .6); flex-wrap:wrap; }
+.dot{
+  width: calc(var(--u) * .78); height: calc(var(--u) * .78); border-radius:50%;
+  background: var(--up); flex:none; position:relative;
+  box-shadow: 0 0 0 0 rgba(95,217,164,.55);
+  animation: pulse 2.6s ease-out infinite;
+}
+@keyframes pulse{
+  0%   { box-shadow:0 0 0 0 rgba(95,217,164,.5); }
+  70%  { box-shadow:0 0 0 calc(var(--u) * .9) rgba(95,217,164,0); }
+  100% { box-shadow:0 0 0 0 rgba(95,217,164,0); }
+}
+.live-label{ font-family: var(--font-kufi); font-weight:600; font-size: calc(var(--u) * 1.18); color: var(--up); }
+.live-sub{ font-size: calc(var(--u) * 1.0); color: var(--muted); font-variant-numeric: tabular-nums; }
+.live.off .dot{ background: var(--down); animation:none; }
+.live.off .live-label{ color: var(--down); }
+
+/* -------------------------------- alert -------------------------------- */
+.alert{
+  display:flex; align-items:center; justify-content:center; gap:.65em;
+  background: var(--down-bg);
+  border:1px solid var(--down-line);
+  color: var(--down);
+  border-radius: calc(var(--u) * .4);
+  padding: calc(var(--u) * .55) calc(var(--u) * 1);
+  font-size: calc(var(--u) * 1.2); font-weight:600;
+}
+.alert[hidden]{ display:none; }
+.alert b{ color:#FFC9BE; font-weight:700; }
+
+/* ------------------------------- board --------------------------------- */
+.board-grid{
+  display:grid;
+  grid-template-columns: minmax(0, 1.42fr) minmax(0, 1fr);
+  gap: calc(var(--u) * 1.3);
+  min-height:0;
+}
+.board-grid[hidden]{ display:none; }
+@media (max-aspect-ratio: 1/1){
+  .board-grid{ grid-template-columns: minmax(0,1fr); }   /* stack panels portrait */
+  .spot-cols { grid-template-columns: minmax(0,.72fr) minmax(0,1.85fr) minmax(0,1.25fr) minmax(0,1.1fr); }
+  .shop-cols { grid-template-columns: minmax(0,.62fr) minmax(0,1fr) minmax(0,1fr); }
+}
+
+.panel{
+  position:relative; min-height:0; overflow:hidden;
+  display:flex; flex-direction:column;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.038), rgba(255,255,255,.008) 60%, rgba(0,0,0,.12));
+  border:1px solid var(--line);
+  border-radius: calc(var(--u) * .45);
+  padding: calc(var(--u) * 1.15) calc(var(--u) * 1.5) calc(var(--u) * .7);
+}
+.panel-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap: calc(var(--u)*.8);
+  padding-bottom: calc(var(--u) * .55);
+  border-bottom:1px solid var(--hair);
+  flex:none;
+}
+.panel-head h2{
+  font-family: var(--font-kufi); font-weight:700;
+  font-size: calc(var(--u) * 1.55); color: var(--gold-hi); line-height:1.2;
+}
+.panel-head .unit{ font-size: calc(var(--u) * 1.0); color: var(--muted); white-space:nowrap; }
+
+.colheads{
+  flex:none;
+  padding: calc(var(--u) * .5) 0 calc(var(--u) * .3);
+  font-family: var(--font-kufi); font-weight:600;
+  font-size: calc(var(--u) * .98); color: var(--gold);
+  border-bottom:1px solid var(--hair);
+}
+.colheads span{ white-space:nowrap; }
+.colheads .h-end{ justify-self:end; }
+.colheads small{ display:block; color: var(--dim); font-weight:500; font-size:.86em; font-family: var(--font-ar); }
+
+.rows{
+  flex:1 1 auto; min-height:0;
+  display:grid; grid-auto-rows: minmax(0,1fr);
+}
+.row{
+  display:grid; align-items:center;
+  gap: calc(var(--u) * 1.1);
+  min-width:0; min-height:0;
+  border-top:1px solid var(--hair);
+  padding: 0 calc(var(--u) * .2);
+}
+.row:first-child{ border-top:0; }
+.row:nth-child(even){ background: rgba(217,180,91,.028); }
+
+/* shared column templates keep headers and rows perfectly aligned */
+.spot-cols{ grid-template-columns: minmax(0,.80fr) minmax(0,1.98fr) minmax(0,1.18fr) minmax(0,1.04fr); }
+.shop-cols{ grid-template-columns: minmax(0,.58fr) minmax(0,1fr) minmax(0,1fr); }
+
+/* --- karat marker --- */
+.karat{ display:flex; align-items:baseline; gap: calc(var(--u) * .42); min-width:0; }
+.k-num{
+  font-family: var(--font-kufi); font-weight:800;
+  font-size: calc(var(--u) * 2.5); color: var(--gold); line-height:1;
+  font-variant-numeric: tabular-nums;
+}
+.k-unit{ font-size: calc(var(--u) * 1.0); color: var(--muted); font-weight:500; }
+
+/* --- numerals: the hero --- */
+.num{
+  font-weight:600; line-height:.98; white-space:nowrap;
+  font-variant-numeric: tabular-nums; letter-spacing:-.012em;
+  display:block;
+}
+.gram .num{
+  font-size: calc(var(--u) * 6.1);
+  color: var(--ivory);
+  text-shadow: 0 0 calc(var(--u) * 2.4) rgba(245,222,156,.16);
+}
+.mithqal .num{
+  font-size: calc(var(--u) * 2.85);
+  color: var(--gold-hi);
+}
+.mithqal{ display:flex; align-items:baseline; gap: calc(var(--u)*.5); }
+.mithqal .lbl{ font-size: calc(var(--u) * .95); color: var(--dim); white-space:nowrap; }
+
+/* --- change chip --- */
+.delta{
+  justify-self:end; align-self:center;
+  display:inline-flex; align-items:center; gap:.4em;
+  padding: calc(var(--u)*.36) calc(var(--u)*.72);
+  border:1px solid; border-radius: 999px;
+  font-size: calc(var(--u) * 1.32); font-weight:600;
+  font-variant-numeric: tabular-nums; white-space:nowrap;
+}
+.delta .arrow{ font-size:.82em; line-height:1; }
+.delta.up   { color:var(--up);   background:var(--up-bg);   border-color:var(--up-line); }
+.delta.down { color:var(--down); background:var(--down-bg); border-color:var(--down-line); }
+.delta.flat { color:var(--flat); background:rgba(255,255,255,.035); border-color:rgba(255,255,255,.09); }
+
+/* --- shop (buy / sell) cells --- */
+.shop-row .cell{ min-width:0; padding-inline-start: calc(var(--u) * .9); }
+.shop-row .cell + .cell{ border-inline-start:1px solid var(--hair); }
+.shop-row .cell:first-child{ padding-inline-start:0; border:0; }
+.shop-row .num{ font-size: calc(var(--u) * 3.35); color: var(--ivory); }
+.shop-row .cell.buy .num{ color: var(--gold-hi); }
+.shop-row .karat .k-num{ font-size: calc(var(--u) * 2.15); }
+
+/* --- a fresh quote gets a one-breath highlight --- */
+@keyframes flashUp{
+  0%{ background:rgba(47,190,132,.20); } 100%{ background:transparent; }
+}
+@keyframes flashDown{
+  0%{ background:rgba(226,86,68,.20); } 100%{ background:transparent; }
+}
+.row.flash-up  { animation: flashUp  1.6s ease-out 1; }
+.row.flash-down{ animation: flashDown 1.6s ease-out 1; }
+
+@keyframes rise{
+  from{ opacity:0; transform: translateY(calc(var(--u) * .8)); }
+  to  { opacity:1; transform:none; }
+}
+.row.enter{ animation: rise .55s cubic-bezier(.2,.7,.3,1) backwards; }
+
+/* ------------------------------ footer --------------------------------- */
+.ledger{
+  display:flex; align-items:center; justify-content:space-between;
+  gap: calc(var(--u) * 1.2); flex-wrap:wrap;
+  padding-top: calc(var(--u) * .8);
+  border-top:1px solid var(--line);
+  font-size: calc(var(--u) * 1.02); color: var(--muted);
+}
+.notes{ display:flex; align-items:center; gap: calc(var(--u) * .85); flex-wrap:wrap; min-width:0; }
+.notes .sep{ color: var(--gold-deep); font-size:.72em; }
+.notes .strong{ color: var(--gold); font-weight:600; }
+.signoff{ font-family: var(--font-kufi); font-weight:500; color: var(--dim); white-space:nowrap; }
+
+/* ----------------------------- empty state ----------------------------- */
+.empty{
+  min-height:0; height:100%;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap: calc(var(--u) * .9); text-align:center;
+  border:1px solid var(--line); border-radius: calc(var(--u)*.45);
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.1));
+  padding: calc(var(--u) * 2);
+}
+.empty[hidden]{ display:none; }
+.empty .mark{ width: calc(var(--u)*4); height: calc(var(--u)*4); opacity:.7; }
+.empty-title{ font-family: var(--font-kufi); font-weight:700; font-size: calc(var(--u)*2.1); color: var(--gold-hi); }
+.empty-body{ font-size: calc(var(--u)*1.25); color: var(--muted); max-width: 42ch; line-height:1.7; }
+.empty-body b{ color: var(--down); font-variant-numeric: tabular-nums; }
+
+/* --------------------------- short screens ----------------------------- */
+@media (max-height: 470px){
+  .colheads{ display:none; }
+  .mithqal .lbl{ display:none; }
+}
+@media (prefers-reduced-motion: reduce){
+  .dot{ animation:none; }
+  .row.enter, .row.flash-up, .row.flash-down{ animation:none; }
+}
+</style>
+</head>
+<body>
+
+<div class="frame" id="frame">
+
+  <!-- ============================ MASTHEAD ============================ -->
+  <header class="masthead">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="100%" height="100%" role="presentation">
+          <defs>
+            <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#F7E3A1"/>
+              <stop offset=".5" stop-color="#D9B45B"/>
+              <stop offset="1" stop-color="#8C6B22"/>
+            </linearGradient>
+          </defs>
+          <g fill="none" stroke="url(#leaf)" stroke-width="1.5" stroke-linejoin="miter">
+            <rect x="9.5" y="9.5" width="29" height="29"/>
+            <rect x="9.5" y="9.5" width="29" height="29" transform="rotate(45 24 24)"/>
+          </g>
+          <circle cx="24" cy="24" r="4.2" fill="url(#leaf)" opacity=".9"/>
+        </svg>
+      </span>
+      <div class="brand-text">
+        <div class="shop" id="shop-name">أسعار الذهب اليوم</div>
+        <div class="tagline" id="shop-tagline">السوق العراقي — تحديث كل 5 دقائق</div>
+      </div>
+    </div>
+
+    <div class="clock">
+      <div class="clock-time" id="clock-time" dir="ltr">--:--</div>
+      <div class="clock-date" id="clock-date">—</div>
+    </div>
+
+    <div class="live" id="live">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="live-label" id="live-label">مباشر</span>
+      <span class="live-sub" id="updated-label">—</span>
+    </div>
+  </header>
+
+  <!-- ============================= ALERT ============================== -->
+  <div class="alert" id="alert" role="alert" hidden></div>
+
+  <!-- ============================= BOARD ============================== -->
+  <main class="board-grid" id="board-grid">
+
+    <!-- spot prices: gram + mithqal + change -->
+    <section class="panel" aria-labelledby="spot-h">
+      <div class="panel-head">
+        <h2 id="spot-h">أسعار الغرام</h2>
+        <span class="unit">دينار عراقي</span>
+      </div>
+      <div class="colheads spot-cols" aria-hidden="true">
+        <span>العيار</span>
+        <span>الغرام</span>
+        <span>المثقال</span>
+        <span class="h-end">التغيّر</span>
+      </div>
+      <div class="rows" id="spot-rows" role="list"></div>
+    </section>
+
+    <!-- shop prices: we buy used / we sell new -->
+    <section class="panel" aria-labelledby="shop-h">
+      <div class="panel-head">
+        <h2 id="shop-h">أسعار المحل</h2>
+        <span class="unit">للمثقال</span>
+      </div>
+      <div class="colheads shop-cols" aria-hidden="true">
+        <span>العيار</span>
+        <span>نشتري<small>المستعمل</small></span>
+        <span>نبيع<small>الجديد</small></span>
+      </div>
+      <div class="rows" id="shop-rows" role="list"></div>
+    </section>
+
+  </main>
+
+  <!-- ---------------------------- empty state -------------------------- -->
+  <div class="empty" id="empty" hidden>
+    <span class="mark" aria-hidden="true">
+      <svg viewBox="0 0 48 48" width="100%" height="100%" role="presentation">
+        <g fill="none" stroke="#D9B45B" stroke-width="1.5">
+          <rect x="9.5" y="9.5" width="29" height="29"/>
+          <rect x="9.5" y="9.5" width="29" height="29" transform="rotate(45 24 24)"/>
+        </g>
+      </svg>
+    </span>
+    <div class="empty-title">تعذّر تحميل الأسعار</div>
+    <div class="empty-body">
+      تحقّق من اتصال الشاشة بالشبكة أو من وجود ملف <span dir="ltr">data.json</span>.
+      ستتم إعادة المحاولة تلقائياً بعد <b id="retry-count">٣٠</b> ثانية.
+    </div>
+  </div>
+
+  <!-- ============================= FOOTER ============================= -->
+  <footer class="ledger">
+    <div class="notes">
+      <span><span class="strong" id="note-mithqal">المثقال = ٥ غرام</span></span>
+      <span class="sep" aria-hidden="true">◆</span>
+      <span>الأسعار لا تشمل أجور الصياغة</span>
+      <span class="sep" aria-hidden="true">◆</span>
+      <span id="note-refresh">التحديث التلقائي كل ٥ دقائق</span>
+    </div>
+    <div class="signoff">أسعار استرشادية قابلة للتغيير</div>
+  </footer>
+
+</div>
+
+<h1 class="sr-only">لوحة أسعار الذهب اليومية</h1>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =====================================================================
+     1. CONFIG — كل ما قد يحتاجه صاحب المحل للتعديل موجود هنا
+     ===================================================================== */
+  var CONFIG = {
+    SHOP_NAME:     'أسعار الذهب اليوم',
+    SHOP_TAGLINE:  'السوق العراقي — تحديث كل 5 دقائق',
+    DATA_URL:      'data.json',
+    REFRESH_MS:    5 * 60 * 1000,   // re-read data.json every 5 minutes
+    RETRY_MS:      30 * 1000,       // back off to 30s while the feed is down
+    FETCH_TIMEOUT: 10 * 1000,
+    MITHQAL_GRAMS: 5,               // 1 mithqal = 5 grams  ← adjustable
+    DIGITS:        'arabic-indic',  // 'arabic-indic' (١٢٣) or 'latin' (123)
+    CURRENCY:      'دينار عراقي'
+  };
+
+  /* =====================================================================
+     2. PURE HELPERS (no DOM) — these are unit-tested by tests/run-tests.js
+     ===================================================================== */
+
+  var AR_DIGITS = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+  var AR_SEP    = '٬';   // Arabic thousands separator U+066C
+
+  /** Convert ASCII digits → Arabic-Indic when configured to. */
+  function mapDigits(str) {
+    str = String(str);
+    if (CONFIG.DIGITS !== 'arabic-indic') return str;
+    return str.replace(/[0-9]/g, function (d) { return AR_DIGITS[+d]; });
+  }
+
+  /** 186577 → "١٨٦٬٥٧٧" (or "186,577" in latin mode). No ICU dependency. */
+  function formatNumber(value) {
+    if (typeof value !== 'number' || !isFinite(value)) return '—';
+    var n    = Math.round(value);
+    var sign = n < 0 ? '-' : '';
+    var s    = String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, CONFIG.DIGITS === 'arabic-indic' ? AR_SEP : ',');
+    return sign + mapDigits(s);
+  }
+
+  /** Karat key → display numerals ("24" → "٢٤"). */
+  function karatLabel(k) { return mapDigits(String(k)); }
+
+  /** current vs previous → { cls:'up'|'down'|'flat', amount, chip } */
+  function deltaOf(current, previous) {
+    if (typeof previous !== 'number' || !isFinite(previous)) {
+      return { cls: 'flat', amount: null, chip: '<span class="arrow" aria-hidden="true">—</span><span>بلا مقارنة</span>' };
+    }
+    var d = Math.round(current - previous);
+    if (d > 0) return { cls: 'up',   amount: d, chip: '<span class="arrow" aria-hidden="true">▲</span><span>' + formatNumber(d) + '</span>' };
+    if (d < 0) return { cls: 'down', amount: d, chip: '<span class="arrow" aria-hidden="true">▼</span><span>' + formatNumber(Math.abs(d)) + '</span>' };
+    return { cls: 'flat', amount: 0, chip: '<span class="arrow" aria-hidden="true">▬</span><span>ثابت</span>' };
+  }
+
+  /** mithqal = gram × CONFIG.MITHQAL_GRAMS */
+  function mithqalOf(gram) {
+    if (typeof gram !== 'number' || !isFinite(gram)) return null;
+    return Math.round(gram * CONFIG.MITHQAL_GRAMS);
+  }
+
+  /** Karat keys sorted descending, numeric first ("24","22","21","18"). */
+  function sortKarats(keys) {
+    return Object.keys(keys).slice().sort(function (a, b) {
+      var na = parseFloat(a), nb = parseFloat(b);
+      var aN = isFinite(na), bN = isFinite(nb);
+      if (aN && bN) return nb - na;
+      if (aN) return -1;
+      if (bN) return 1;
+      return String(a).localeCompare(String(b));
+    });
+  }
+
+  function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /** data.json must at least carry numeric prices; everything else is lenient. */
+  function validate(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('الاستجابة ليست كائناً صحيحاً');
+    if (!data.prices || typeof data.prices !== 'object') throw new Error('حقل prices مفقود');
+    var keys = Object.keys(data.prices);
+    if (!keys.length) throw new Error('لا توجد أسعار في الحقل prices');
+    for (var i = 0; i < keys.length; i++) {
+      var v = data.prices[keys[i]];
+      if (typeof v !== 'number' || !isFinite(v)) throw new Error('قيمة غير رقمية للعيار ' + keys[i]);
+    }
+    return data;
+  }
+
+  /* ---- Arabic calendar vocabulary (Iraqi month names) ------------------ */
+  var AR_DAYS   = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  var AR_MONTHS = ['كانون الثاني','شباط','آذار','نيسان','أيار','حزيران','تموز','آب','أيلول','تشرين الأول','تشرين الثاني','كانون الأول'];
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  /** 24-hour clock, digits per CONFIG. */
+  function formatClock(d) {
+    return mapDigits(pad2(d.getHours()) + ':' + pad2(d.getMinutes()));
+  }
+
+  /** "السبت ٥ أيلول ٢٠٢٦" */
+  function formatDate(d) {
+    return AR_DAYS[d.getDay()] + ' ' + mapDigits(d.getDate()) + ' ' + AR_MONTHS[d.getMonth()] + ' ' + mapDigits(d.getFullYear());
+  }
+
+  /** Hijri (Umm al-Qura) via Intl when the browser supports it; else ''. */
+  function formatHijri(d) {
+    try {
+      var parts = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-latn', {
+        day: 'numeric', month: 'numeric', year: 'numeric'
+      }).formatToParts(d);
+      var day = '', mon = '', yr = '';
+      parts.forEach(function (p) {
+        if (p.type === 'day') day = p.value;
+        if (p.type === 'month') mon = p.value;
+        if (p.type === 'year') yr = p.value;
+      });
+      var HIJRI_MONTHS = ['محرّم','صفر','ربيع الأول','ربيع الآخر','جمادى الأولى','جمادى الآخرة','رجب','شعبان','رمضان','شوّال','ذو القعدة','ذو الحجة'];
+      var mi = parseInt(mon, 10);
+      if (!isFinite(mi) || mi < 1 || mi > 12) return '';
+      var y = yr.replace(/[^0-9]/g, '');
+      if (!y) return '';
+      return mapDigits(day) + ' ' + HIJRI_MONTHS[mi - 1] + ' ' + mapDigits(y) + ' هـ';
+    } catch (e) { return ''; }
+  }
+
+  /** Arabic plural for minutes / hours. */
+  function plural(n, one, two, few, many) {
+    if (n === 1) return one;
+    if (n === 2) return two;
+    if (n >= 3 && n <= 10) return few;
+    return many;
+  }
+
+  /** "قبل ٣ دقائق" — human, relative to now. */
+  function relativeFrom(date, now) {
+    if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+    var secs = Math.max(0, Math.floor(((now || new Date()).getTime() - date.getTime()) / 1000));
+    if (secs < 60) return 'قبل أقل من دقيقة';
+    var mins = Math.floor(secs / 60);
+    if (mins < 60) {
+      return 'قبل ' + mapDigits(mins) + ' ' + plural(mins, 'دقيقة', 'دقيقتين', 'دقائق', 'دقيقة');
+    }
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) {
+      return 'قبل ' + mapDigits(hrs) + ' ' + plural(hrs, 'ساعة', 'ساعتين', 'ساعات', 'ساعة');
+    }
+    var days = Math.floor(hrs / 24);
+    return 'قبل ' + mapDigits(days) + ' ' + plural(days, 'يوم', 'يومين', 'أيام', 'يوماً');
+  }
+
+  /** "updated_at" has no timezone → interpret as the tablet's local time. */
+  function parseTimestamp(s) {
+    if (typeof s !== 'string' || !s) return null;
+    var d = new Date(s);
+    if (isNaN(d.getTime())) {
+      var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+      if (!m) return null;
+      d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+    }
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  /* =====================================================================
+     3. RENDER
+     ===================================================================== */
+  var dom = {};
+  function $(id) { return document.getElementById(id); }
+
+  function cacheDom() {
+    ['frame','shop-name','shop-tagline','clock-time','clock-date','live','live-label',
+     'updated-label','alert','board-grid','spot-rows','shop-rows','empty','retry-count',
+     'note-mithqal','note-refresh'].forEach(function (id) { dom[id] = $(id); });
+  }
+
+  var rendered = { spot: {}, shop: {} };   // last painted values → change flash
+
+  function spotRowHTML(k, data) {
+    var cur  = data.prices[k];
+    var prev = data.previous && typeof data.previous === 'object' ? data.previous[k] : undefined;
+    var d    = deltaOf(cur, prev);
+    var mit  = mithqalOf(cur);
+    return ''
+      + '<div class="row spot-cols" role="listitem" data-karat="' + escapeHTML(k) + '"'
+      +   ' aria-label="عيار ' + karatLabel(k) + '، الغرام ' + formatNumber(cur) + '، المثقال ' + formatNumber(mit) + '">'
+      +   '<div class="karat"><span class="k-num">' + karatLabel(k) + '</span><span class="k-unit">قيراط</span></div>'
+      +   '<div class="cell gram"><span class="num">' + formatNumber(cur) + '</span></div>'
+      +   '<div class="cell mithqal"><span class="num">' + formatNumber(mit) + '</span>'
+      +     '<span class="lbl">للمثقال</span></div>'
+      +   '<div class="cell"><span class="delta ' + d.cls + '" data-delta>' + d.chip + '</span></div>'
+      + '</div>';
+  }
+
+  function shopRowHTML(k, bs) {
+    var used = (bs && typeof bs.sell_used === 'number' && isFinite(bs.sell_used)) ? mithqalOf(bs.sell_used) : null;
+    var newG = (bs && typeof bs.buy_new  === 'number' && isFinite(bs.buy_new))  ? mithqalOf(bs.buy_new)  : null;
+    return ''
+      + '<div class="row shop-row shop-cols" role="listitem" data-karat="' + escapeHTML(k) + '">'
+      +   '<div class="karat"><span class="k-num">' + karatLabel(k) + '</span><span class="k-unit">قيراط</span></div>'
+      +   '<div class="cell sell"><span class="num">' + formatNumber(used) + '</span></div>'
+      +   '<div class="cell buy"><span class="num">' + formatNumber(newG) + '</span></div>'
+      + '</div>';
+  }
+
+  /** Paint both panels. Never throws: bad slices degrade to "—" cells. */
+  function render(data) {
+    /* ---- spot: gram + mithqal + change (24/22/21 — whatever prices holds) */
+    var spotKeys = sortKarats(data.prices);
+    var spotHTML = '';
+    var nextSpot = {};
+    spotKeys.forEach(function (k, i) {
+      spotHTML += spotRowHTML(k, data);
+      nextSpot[k] = data.prices[k];
+    });
+    dom['spot-rows'].innerHTML = spotHTML;
+
+    /* ---- shop: buy used / sell new (22/21/18 — 24 legitimately absent) -- */
+    var shopHTML = '';
+    var nextShop = {};
+    var bs = (data.buy_sell && typeof data.buy_sell === 'object') ? data.buy_sell : {};
+    sortKarats(bs).forEach(function (k) {
+      shopHTML += shopRowHTML(k, bs[k]);
+      nextShop[k] = [bs[k] && bs[k].sell_used, bs[k] && bs[k].buy_new].join('|');
+    });
+    dom['shop-rows'].innerHTML = shopHTML
+      || '<div class="row"><div class="k-unit">لا توجد أسعار محل في الملف</div></div>';
+
+    /* ---- first paint: staggered rise; later paints: flash what changed -- */
+    var firstPaint = !Object.keys(rendered.spot).length && !Object.keys(rendered.shop).length;
+    var rows = dom['board-grid'].querySelectorAll('.row');
+    Array.prototype.forEach.call(rows, function (row, i) {
+      if (firstPaint) {
+        row.classList.add('enter');
+        row.style.animationDelay = (i * 70) + 'ms';
+      }
+    });
+    if (!firstPaint) flashChanges(dom['spot-rows'], rendered.spot, nextSpot);
+
+    rendered.spot = nextSpot;
+    rendered.shop = nextShop;
+
+    /* ---- last-updated line ------------------------------------------- */
+    var ts = parseTimestamp(data.updated_at);
+    state.updatedAt = ts;
+    if (ts) {
+      dom['updated-label'].textContent = 'آخر تحديث ' + formatClock(ts) + ' · ' + relativeFrom(ts);
+    } else {
+      dom['updated-label'].textContent = 'آخر تحديث غير معروف';
+    }
+
+    state.hasData = true;
+    dom['board-grid'].hidden = false;
+    dom['empty'].hidden = true;
+  }
+
+  function flashChanges(container, oldVals, newVals) {
+    Array.prototype.forEach.call(container.querySelectorAll('.row'), function (row) {
+      var k = row.getAttribute('data-karat');
+      if (!(k in oldVals)) return;
+      var a = Number(oldVals[k]), b = Number(newVals[k]);
+      if (!isFinite(a) || !isFinite(b) || a === b) return;
+      row.classList.add(b > a ? 'flash-up' : 'flash-down');
+      setTimeout(function () { row.classList.remove('flash-up', 'flash-down'); }, 1700);
+    });
+  }
+
+  /* =====================================================================
+     4. STATE: live / error
+     ===================================================================== */
+  var state = {
+    hasData: false,
+    updatedAt: null,
+    failing: false,
+    retryAt: null
+  };
+
+  function setLive() {
+    dom['live'].classList.remove('off');
+    dom['live-label'].textContent = 'مباشر';
+    dom['alert'].hidden = true;
+    dom['frame'].classList.remove('stale');
+    state.failing = false;
+    state.retryAt = null;
+  }
+
+  function setError(err, retryInSec) {
+    state.failing = true;
+    state.retryAt = Date.now() + retryInSec * 1000;
+    dom['live'].classList.add('off');
+    dom['live-label'].textContent = 'غير محدَّث';
+
+    if (state.hasData) {
+      /* keep the last known numbers on screen, clearly marked as stale */
+      dom['frame'].classList.add('stale');
+      dom['alert'].innerHTML = 'تعذّر تحديث الأسعار — المعروض هو آخر سعر مسجَّل. إعادة المحاولة بعد <b>'
+        + mapDigits(retryInSec) + '</b> ثانية.';
+      dom['alert'].hidden = false;
+      dom['board-grid'].hidden = false;
+      dom['empty'].hidden = true;
+    } else {
+      /* nothing to show at all → explicit message, never a blank board */
+      dom['frame'].classList.remove('stale');
+      dom['board-grid'].hidden = true;
+      dom['empty'].hidden = false;
+      dom['alert'].hidden = true;
+    }
+    if (window.console && console.warn) console.warn('[gold-board] تحديث فاشل:', err && err.message ? err.message : err);
+  }
+
+  /* =====================================================================
+     5. FETCH LOOP — on load, then every REFRESH_MS; RETRY_MS while down
+     ===================================================================== */
+  var refreshTimer = null;
+  var retryTimer = null;
+
+  function stopTimers() {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    if (retryTimer)   { clearTimeout(retryTimer);    retryTimer = null; }
+  }
+
+  function scheduleRefresh(ms) {
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(refresh, ms);
+  }
+
+  function scheduleRetry(ms) {
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = setTimeout(refresh, ms);
+  }
+
+  function fetchJSON(url, timeoutMs) {
+    var controller = ('AbortController' in window) ? new AbortController() : null;
+    var to = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
+    return fetch(url, {
+      cache: 'no-store',
+      headers: { 'Accept': 'application/json' },
+      signal: controller ? controller.signal : undefined
+    }).then(function (res) {
+      if (to) clearTimeout(to);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();               // rejects on malformed JSON
+    }, function (err) {
+      if (to) clearTimeout(to);
+      throw err;
+    });
+  }
+
+  function refresh() {
+    var url = CONFIG.DATA_URL + '?_=' + Date.now();   // cache-busting
+    return fetchJSON(url, CONFIG.FETCH_TIMEOUT)
+      .then(function (data) {
+        validate(data);
+        render(data);
+        setLive();
+        scheduleRefresh(CONFIG.REFRESH_MS);
+      })
+      .catch(function (err) {
+        setError(err, Math.round(CONFIG.RETRY_MS / 1000));
+        scheduleRetry(CONFIG.RETRY_MS);
+      });
+  }
+
+  /* =====================================================================
+     6. CLOCK / TICKERS
+     ===================================================================== */
+  function tickClock() {
+    var now = new Date();
+    dom['clock-time'].textContent = formatClock(now);
+    var hijri = formatHijri(now);
+    dom['clock-date'].textContent = formatDate(now) + (hijri ? '  ·  ' + hijri : '');
+  }
+
+  function tickRelative() {
+    if (!state.updatedAt) return;
+    dom['updated-label'].textContent = 'آخر تحديث ' + formatClock(state.updatedAt) + ' · ' + relativeFrom(state.updatedAt);
+  }
+
+  function tickRetry() {
+    if (!state.failing || !state.retryAt) return;
+    var left = Math.max(0, Math.ceil((state.retryAt - Date.now()) / 1000));
+    var label = mapDigits(left);
+    if (dom['retry-count']) dom['retry-count'].textContent = label;
+    if (state.hasData) {
+      dom['alert'].innerHTML = 'تعذّر تحديث الأسعار — المعروض هو آخر سعر مسجَّل. إعادة المحاولة بعد <b>'
+        + label + '</b> ثانية.';
+    }
+  }
+
+  /* =====================================================================
+     7. BOOT
+     ===================================================================== */
+  function init() {
+    cacheDom();
+    /* اسم المحل الافتراضي يظهر لحين وصول أول data.json (انظر applyBranding) */
+    dom['shop-name'].textContent = CONFIG.SHOP_NAME;
+    dom['shop-tagline'].textContent = CONFIG.SHOP_TAGLINE;
+    document.title = CONFIG.SHOP_NAME + ' — أسعار الذهب';
+    dom['note-mithqal'].textContent = 'المثقال = ' + mapDigits(CONFIG.MITHQAL_GRAMS) + ' غرام';
+    dom['note-refresh'].textContent = 'التحديث التلقائي كل ' + mapDigits(Math.round(CONFIG.REFRESH_MS / 60000)) + ' دقائق';
+
+    tickClock();
+    setInterval(tickClock, 1000);
+    setInterval(tickRelative, 15000);
+    setInterval(tickRetry, 1000);
+
+    /* kiosk wake-up: re-read the file the moment the screen comes back */
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { tickClock(); refresh(); }
+    });
+
+    refresh();
+  }
+
+  /* expose internals for automated checks (tests/run-tests.js) */
+  window.GoldBoard = {
+    CONFIG: CONFIG,
+    formatNumber: formatNumber,
+    mapDigits: mapDigits,
+    karatLabel: karatLabel,
+    deltaOf: deltaOf,
+    mithqalOf: mithqalOf,
+    sortKarats: sortKarats,
+    validate: validate,
+    escapeHTML: escapeHTML,
+    formatClock: formatClock,
+    formatDate: formatDate,
+    formatHijri: formatHijri,
+    relativeFrom: relativeFrom,
+    parseTimestamp: parseTimestamp,
+    plural: plural,
+    render: render,
+    refresh: refresh,
+    setError: setError,
+    setLive: setLive,
+    _state: state
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>
